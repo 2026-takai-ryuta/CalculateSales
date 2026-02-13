@@ -30,6 +30,13 @@ public class CalculateSales {
 	 * @param コマンドライン引数
 	 */
 	public static void main(String[] args) throws IOException{
+
+		// コマンドライン引数が渡されてるか確認
+		if (args.length != 1) {
+			System.out.println(UNKNOWN_ERROR);
+			return;
+		}
+
 		// 支店コードと支店名を保持するMap
 		Map<String, String> branchNames = new HashMap<>();
 		// 支店コードと売上金額を保持するMap
@@ -48,10 +55,24 @@ public class CalculateSales {
 		// ファイル情報を格納するList
 		List<File> rcdFiles = new ArrayList<>();
 
-		// 売上ファイルであればListに追加
+		// 8桁のファイル（売上ファイル）であればListに追加
 		for(int i = 0; i < files.length; i++) {
-			if(files[i].getName().matches("^[0-9]{8}\\.rcd$")) {
+			if(files[i].isFile() && files[i].getName().matches("^[0-9]{8}\\.rcd$")) {
 				rcdFiles.add(files[i]);
+			}
+		}
+
+		// 売上ファイルが連番か確認
+		for(int i = 0; i < rcdFiles.size() -1; i++) {
+
+			// 続く二つのファイル名の先頭8桁を取得しint型に変換
+			int former = Integer.parseInt(rcdFiles.get(i).getName().substring(0, 8));
+			int latter = Integer.parseInt(rcdFiles.get(i + 1).getName().substring(0, 8));
+
+			// 差が1でなければ連番になっていないのでエラー
+			if((latter - former) != 1) {
+				System.out.println("売上ファイル名が連番になっていません");
+				return;
 			}
 		}
 
@@ -59,23 +80,41 @@ public class CalculateSales {
 		for(int i = 0; i < rcdFiles.size(); i++) {
 			// ファイルを取り出す
 			File file = rcdFiles.get(i);
+			BufferedReader br = null;
 
 			// ファイルの中身を読む
 			try{
-				BufferedReader br = new BufferedReader(new FileReader(file));
+				br = new BufferedReader(new FileReader(file));
 
-			//★Listを作る
-			List<String> lines = new ArrayList<>();
+				//Listを作る
+				List<String> salesLines = new ArrayList<>();
 
 				String line;
 				while ((line = br.readLine()) != null) {
-					//★作ったリストにaddする
-					lines.add(line);
+					//作ったリストにaddする
+					salesLines.add(line);
+				}
+
+				// 支店コードが存在しているかチェック
+				if (!branchNames.containsKey(salesLines.get(0))) {
+					System.out.println(rcdFiles.get(i).getName() + "の支店コードが不正です");
+			        return;
+				}
+
+				// 売上ファイルが2行になっているか確認
+				if(salesLines.size() != 2) {
+					System.out.println(rcdFiles.get(i).getName() + "のフォーマットが不正です");
+			        return;
 				}
 
 				// リストにそれぞれ追加
-				String code = lines.get(0);
-				String sales = lines.get(1);
+				String code = salesLines.get(0);
+				String sales = salesLines.get(1);
+
+				if(!salesLines.get(1).matches("^[0-9]+$")) {
+					System.out.println(UNKNOWN_ERROR);
+					return;
+				}
 
 				// 売上の型変換
 				long fileSale = Long.parseLong(sales);
@@ -83,15 +122,31 @@ public class CalculateSales {
 				// 売上の加算
 				Long saleAmount = branchSales.get(code) + fileSale;
 
+				// 合計売上金額が10桁を超えたかチェック
+				if(saleAmount >= 10000000000L){
+					System.out.println("合計⾦額が10桁を超えました");
+			        return;
+				}
+
 				// 加算した売上を追加
 				branchSales.put(code, saleAmount);
-				br.close();
 
 				// ファイルが開けない、読み込めない場合のエラー
 			} catch (IOException e) {
 		        System.out.println(UNKNOWN_ERROR);
 		        return;
-		    }
+		    } finally {
+				// ファイルを開いている場合
+				if (br != null) {
+					try {
+						// ファイルを閉じる
+						br.close();
+					} catch (IOException e) {
+						System.out.println(UNKNOWN_ERROR);
+						return;
+					}
+				}
+			}
 		}
 
 		// 支店別集計ファイル書き込み処理
@@ -115,6 +170,11 @@ public class CalculateSales {
 
 		try {
 			File file = new File(path, fileName);
+			// ファイルの存在チェック
+			if(!file.exists()) {
+			    System.out.println(FILE_NOT_EXIST);
+			    return false;
+			}
 			FileReader fr = new FileReader(file);
 			br = new BufferedReader(fr);
 
@@ -123,6 +183,12 @@ public class CalculateSales {
 			while ((line = br.readLine()) != null) {
 				// ※ここの読み込み処理を変更してください。(処理内容1-2)
 				String[] items = line.split(",");
+
+				// フォーマット確認
+				if((items.length != 2) || (!items[0].matches("^[0-9]{3}$"))){
+				    System.out.println(FILE_INVALID_FORMAT);
+				    return false;
+				}
 
 				//Mapに追加する2つの情報をputの引数として指定
 				branchNames.put(items[0], items[1]);
@@ -162,9 +228,10 @@ public class CalculateSales {
 	private static boolean writeFile(String path, String fileName, Map<String, String> branchNames,
 			Map<String, Long> branchSales) throws IOException {
 		// ※ここに書き込み処理を作成してください。(処理内容3-1)
+		BufferedWriter bw = null;
 		// 書き出す準備
 		try{
-			BufferedWriter bw = new BufferedWriter(new FileWriter(new File(path, fileName)));
+			bw = new BufferedWriter(new FileWriter(new File(path, fileName)));
 
 		// 支店コードを取り出してその分繰り返す
 		for (String key : branchNames.keySet()) {
@@ -176,13 +243,23 @@ public class CalculateSales {
 			bw.newLine();
 		}
 
-		// 閉じる
-		bw.close();
+
 
 		// ファイルが開けない、読み込めない場合のエラー
 		} catch (IOException e) {
 			System.out.println(UNKNOWN_ERROR);
 			return false;
+		} finally {
+			// ファイルを開いている場合
+			if (bw != null) {
+				try {
+					// ファイルを閉じる
+					bw.close();
+				} catch (IOException e) {
+					System.out.println(UNKNOWN_ERROR);
+					return false;
+				}
+			}
 		}
 
 		return true;
