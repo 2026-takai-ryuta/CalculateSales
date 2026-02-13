@@ -29,7 +29,7 @@ public class CalculateSales {
 	 *
 	 * @param コマンドライン引数
 	 */
-	public static void main(String[] args) throws Exception{
+	public static void main(String[] args) throws IOException{
 		// 支店コードと支店名を保持するMap
 		Map<String, String> branchNames = new HashMap<>();
 		// 支店コードと売上金額を保持するMap
@@ -42,7 +42,7 @@ public class CalculateSales {
 
 		// ※ここから集計処理を作成してください。(処理内容2-1、2-2)
 		// 全てのファイルを取得
-		File[] files = new File("C:\\Users\\takai.ryuta\\Desktop\\売り上げ集計課題").listFiles();
+		File[] files = new File(args[0]).listFiles();
 
 
 		// ファイル情報を格納するList
@@ -50,7 +50,7 @@ public class CalculateSales {
 
 		// 売上ファイルであればListに追加
 		for(int i = 0; i < files.length; i++) {
-			if(files[i].getName().matches("^[0-9]{8}.+rcd$")) {
+			if(files[i].getName().matches("^[0-9]{8}\\.rcd$")) {
 				rcdFiles.add(files[i]);
 			}
 		}
@@ -61,9 +61,21 @@ public class CalculateSales {
 			File file = rcdFiles.get(i);
 
 			// ファイルの中身を読む
-			BufferedReader br = new BufferedReader(new FileReader(file));
-				String code = br.readLine();
-				String sales = br.readLine();
+			try{
+				BufferedReader br = new BufferedReader(new FileReader(file));
+
+			//★Listを作る
+			List<String> lines = new ArrayList<>();
+
+				String line;
+				while ((line = br.readLine()) != null) {
+					//★作ったリストにaddする
+					lines.add(line);
+				}
+
+				// リストにそれぞれ追加
+				String code = lines.get(0);
+				String sales = lines.get(1);
 
 				// 売上の型変換
 				long fileSale = Long.parseLong(sales);
@@ -74,10 +86,16 @@ public class CalculateSales {
 				// 加算した売上を追加
 				branchSales.put(code, saleAmount);
 				br.close();
+
+				// ファイルが開けない、読み込めない場合のエラー
+			} catch (IOException e) {
+		        System.out.println(UNKNOWN_ERROR);
+		        return;
+		    }
 		}
 
 		// 支店別集計ファイル書き込み処理
-		if(!writeFile(args[0], FILE_NAME_BRANCH_OUT, branchNames, branchSales)) {
+		if(!writeFile(args[0], FILE_NAME_BRANCH_OUT, branchNames, branchSales))  {
 			return;
 		}
 	}
@@ -145,17 +163,14 @@ public class CalculateSales {
 			Map<String, Long> branchSales) throws IOException {
 		// ※ここに書き込み処理を作成してください。(処理内容3-1)
 		// 書き出す準備
-		BufferedWriter bw = new BufferedWriter(new FileWriter(new File(path, fileName)));
+		try{
+			BufferedWriter bw = new BufferedWriter(new FileWriter(new File(path, fileName)));
 
 		// 支店コードを取り出してその分繰り返す
 		for (String key : branchNames.keySet()) {
 
-			// 支店名と売上金額を取得
-			String name = branchNames.get(key);
-			Long amount = branchSales.get(key);
-
 			// 支店コード、支店名、売上金額をファイルに書き込む
-			bw.write(key + "," + name + "," + amount);
+			bw.write(key + "," + branchNames.get(key) + "," + branchSales.get(key));
 
 			// 改行
 			bw.newLine();
@@ -163,7 +178,13 @@ public class CalculateSales {
 
 		// 閉じる
 		bw.close();
+
+		// ファイルが開けない、読み込めない場合のエラー
+		} catch (IOException e) {
+			System.out.println(UNKNOWN_ERROR);
+			return false;
+		}
+
 		return true;
 	}
-
 }
