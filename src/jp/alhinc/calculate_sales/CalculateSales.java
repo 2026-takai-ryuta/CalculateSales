@@ -7,6 +7,7 @@ import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -23,6 +24,8 @@ public class CalculateSales {
 	private static final String UNKNOWN_ERROR = "予期せぬエラーが発生しました";
 	private static final String FILE_NOT_EXIST = "支店定義ファイルが存在しません";
 	private static final String FILE_INVALID_FORMAT = "支店定義ファイルのフォーマットが不正です";
+	private static final String FILE_NAME_ORDER_ERROR = "売上ファイル名が連番になっていません";
+	private static final String MAX_SALES_AMOUNT_ERROR = "合計金額が10桁を超えました";
 
 	/**
 	 * メインメソッド
@@ -62,6 +65,8 @@ public class CalculateSales {
 			}
 		}
 
+		Collections.sort(rcdFiles);
+
 		// 売上ファイルが連番か確認
 		for(int i = 0; i < rcdFiles.size() -1; i++) {
 
@@ -71,7 +76,7 @@ public class CalculateSales {
 
 			// 差が1でなければ連番になっていないのでエラー
 			if((latter - former) != 1) {
-				System.out.println("売上ファイル名が連番になっていません");
+				System.out.println(FILE_NAME_ORDER_ERROR);
 				return;
 			}
 		}
@@ -95,23 +100,23 @@ public class CalculateSales {
 					salesLines.add(line);
 				}
 
-				// 支店コードが存在しているかチェック
-				if (!branchNames.containsKey(salesLines.get(0))) {
-					System.out.println(rcdFiles.get(i).getName() + "の支店コードが不正です");
-			        return;
-				}
-
 				// 売上ファイルが2行になっているか確認
 				if(salesLines.size() != 2) {
 					System.out.println(rcdFiles.get(i).getName() + "のフォーマットが不正です");
 			        return;
 				}
 
-				// リストにそれぞれ追加
+				// 変数にそれぞれ追加
 				String code = salesLines.get(0);
 				String sales = salesLines.get(1);
 
-				if(!salesLines.get(1).matches("^[0-9]+$")) {
+				// 支店コードが存在しているかチェック
+				if (!branchNames.containsKey(code)) {
+					System.out.println(rcdFiles.get(i).getName() + "の支店コードが不正です");
+			        return;
+				}
+
+				if(!sales.matches("^[0-9]+$")) {
 					System.out.println(UNKNOWN_ERROR);
 					return;
 				}
@@ -124,7 +129,7 @@ public class CalculateSales {
 
 				// 合計売上金額が10桁を超えたかチェック
 				if(saleAmount >= 10000000000L){
-					System.out.println("合計⾦額が10桁を超えました");
+					System.out.println(MAX_SALES_AMOUNT_ERROR);
 			        return;
 				}
 
@@ -194,8 +199,6 @@ public class CalculateSales {
 				branchNames.put(items[0], items[1]);
 				branchSales.put(items[0], 0L);
 
-				System.out.println(line);
-
 			}
 
 		} catch (IOException e) {
@@ -231,19 +234,17 @@ public class CalculateSales {
 		BufferedWriter bw = null;
 		// 書き出す準備
 		try{
-			bw = new BufferedWriter(new FileWriter(new File(path, fileName)));
+				bw = new BufferedWriter(new FileWriter(new File(path, fileName)));
 
-		// 支店コードを取り出してその分繰り返す
-		for (String key : branchNames.keySet()) {
+			// 支店コードを取り出してその分繰り返す
+			for (String key : branchNames.keySet()) {
 
-			// 支店コード、支店名、売上金額をファイルに書き込む
-			bw.write(key + "," + branchNames.get(key) + "," + branchSales.get(key));
+				// 支店コード、支店名、売上金額をファイルに書き込む
+				bw.write(key + "," + branchNames.get(key) + "," + branchSales.get(key));
 
-			// 改行
-			bw.newLine();
-		}
-
-
+				// 改行
+				bw.newLine();
+			}
 
 		// ファイルが開けない、読み込めない場合のエラー
 		} catch (IOException e) {
