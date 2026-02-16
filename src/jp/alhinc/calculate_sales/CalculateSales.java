@@ -20,11 +20,22 @@ public class CalculateSales {
 	// 支店別集計ファイル名
 	private static final String FILE_NAME_BRANCH_OUT = "branch.out";
 
+	// 商品定義ファイル名
+	private static final String FILE_NAME_COMMODITY_LST = "commodity.lst";
+
+	// 商品別集計ファイル名
+	private static final String FILE_NAME_COMMODITY_OUT = "commodity.out";
+
 	// エラーメッセージ
 	private static final String UNKNOWN_ERROR = "予期せぬエラーが発生しました";
-	private static final String FILE_NOT_EXIST = "支店定義ファイルが存在しません";
-	private static final String FILE_INVALID_FORMAT = "支店定義ファイルのフォーマットが不正です";
+	private static final String BRANCH_FILE_NOT_EXIST = "支店定義ファイルが存在しません";
+	private static final String COMMODITY_FILE_NOT_EXIST = "商品定義ファイルが存在しません";
+	private static final String BRANCH_FILE_INVALID_FORMAT = "支店定義ファイルのフォーマットが不正です";
+	private static final String COMMODITY_FILE_INVALID_FORMAT = "商品定義ファイルのフォーマットが不正です";
 	private static final String FILE_NAME_ORDER_ERROR = "売上ファイル名が連番になっていません";
+	private static final String INVALID_FORMAT = "のフォーマットが不正です";
+	private static final String INVALID_BRANCH_CODE_ERROR = "の支店コードが不正です";
+	private static final String INVALID_COMMODITY_CODE_ERROR = "の商品コードが不正です";
 	private static final String MAX_SALES_AMOUNT_ERROR = "合計金額が10桁を超えました";
 
 	/**
@@ -44,9 +55,32 @@ public class CalculateSales {
 		Map<String, String> branchNames = new HashMap<>();
 		// 支店コードと売上金額を保持するMap
 		Map<String, Long> branchSales = new HashMap<>();
+		// 商品コードと商品名を保持するMap
+		Map<String, String> commodityNames = new HashMap<>();
+		// 商品コードと売上金額を保持するMap
+		Map<String, Long> commoditySales = new HashMap<>();
+
+		// ファイルの存在チェック
+		File branchFile = new File(args[0], "branch.lst");
+		if(!branchFile.exists()) {
+		    System.out.println(BRANCH_FILE_NOT_EXIST);
+		    return;
+		}
 
 		// 支店定義ファイル読み込み処理
-		if(!readFile(args[0], FILE_NAME_BRANCH_LST, branchNames, branchSales)) {
+		if(!readFile(args[0], FILE_NAME_BRANCH_LST, branchNames, branchSales, "^[0-9]{3}$", BRANCH_FILE_INVALID_FORMAT)) {
+			return;
+		}
+
+		// ファイルの存在チェック
+		File commodityFile = new File(args[0], "commodity.lst");
+		if(!commodityFile.exists()) {
+		    System.out.println(COMMODITY_FILE_NOT_EXIST);
+			    return;
+		}
+
+		// 商品定義ファイル読み込み処理
+		if(!readFile(args[0], FILE_NAME_COMMODITY_LST, commodityNames, commoditySales, "[0-9a-zA-Z]{8}$", COMMODITY_FILE_INVALID_FORMAT)) {
 			return;
 		}
 
@@ -100,22 +134,30 @@ public class CalculateSales {
 					salesLines.add(line);
 				}
 
-				// 売上ファイルが2行になっているか確認
-				if(salesLines.size() != 2) {
-					System.out.println(rcdFiles.get(i).getName() + "のフォーマットが不正です");
+				// 売上ファイルが3行になっているか確認
+				if(salesLines.size() != 3) {
+					System.out.println(rcdFiles.get(i).getName() + INVALID_FORMAT);
 			        return;
 				}
 
 				// 変数にそれぞれ追加
-				String code = salesLines.get(0);
-				String sales = salesLines.get(1);
+				String branchCode = salesLines.get(0);
+				String commodityCode = salesLines.get(1);
+				String sales = salesLines.get(2);
 
 				// 支店コードが存在しているかチェック
-				if (!branchNames.containsKey(code)) {
-					System.out.println(rcdFiles.get(i).getName() + "の支店コードが不正です");
+				if (!branchNames.containsKey(branchCode)) {
+					System.out.println(rcdFiles.get(i).getName() + INVALID_BRANCH_CODE_ERROR);
 			        return;
 				}
 
+				// 商品コードが存在しているかチェック
+				if (!commodityNames.containsKey(commodityCode)) {
+					System.out.println(rcdFiles.get(i).getName() + INVALID_COMMODITY_CODE_ERROR);
+			        return;
+				}
+
+				// 数字かチェック
 				if(!sales.matches("^[0-9]+$")) {
 					System.out.println(UNKNOWN_ERROR);
 					return;
@@ -124,17 +166,23 @@ public class CalculateSales {
 				// 売上の型変換
 				long fileSale = Long.parseLong(sales);
 
-				// 売上の加算
-				Long saleAmount = branchSales.get(code) + fileSale;
+				// 支店売上の加算
+				Long branchSaleAmount = branchSales.get(branchCode) + fileSale;
+
+				// 商品売上の加算
+				Long commoditySaleAmount = commoditySales.get(branchCode) + fileSale;
 
 				// 合計売上金額が10桁を超えたかチェック
-				if(saleAmount >= 10000000000L){
+				if((branchSaleAmount >= 10000000000L) || (commoditySaleAmount >= 10000000000L)){
 					System.out.println(MAX_SALES_AMOUNT_ERROR);
 			        return;
 				}
 
-				// 加算した売上を追加
-				branchSales.put(code, saleAmount);
+				// 加算した支店売上を追加
+				branchSales.put(branchCode, branchSaleAmount);
+
+				// 加算した商品売上を追加
+				commoditySales.put(branchCode, commoditySaleAmount);
 
 				// ファイルが開けない、読み込めない場合のエラー
 			} catch (IOException e) {
@@ -158,6 +206,11 @@ public class CalculateSales {
 		if(!writeFile(args[0], FILE_NAME_BRANCH_OUT, branchNames, branchSales))  {
 			return;
 		}
+
+		// 商品別集計ファイル書き込み処理
+		if(!writeFile(args[0], FILE_NAME_COMMODITY_OUT, commodityNames, commoditySales))  {
+			return;
+		}
 	}
 
 	/**
@@ -169,17 +222,12 @@ public class CalculateSales {
 	 * @param 支店コードと売上金額を保持するMap
 	 * @return 読み込み可否
 	 */
-	private static boolean readFile(String path, String fileName, Map<String, String> branchNames,
-			Map<String, Long> branchSales) {
+	private static boolean readFile(String path, String fileName, Map<String, String> Names,
+			Map<String, Long> Sales, String codeRegex, String errorMessage) {
 		BufferedReader br = null;
 
 		try {
 			File file = new File(path, fileName);
-			// ファイルの存在チェック
-			if(!file.exists()) {
-			    System.out.println(FILE_NOT_EXIST);
-			    return false;
-			}
 			FileReader fr = new FileReader(file);
 			br = new BufferedReader(fr);
 
@@ -190,14 +238,14 @@ public class CalculateSales {
 				String[] items = line.split(",");
 
 				// フォーマット確認
-				if((items.length != 2) || (!items[0].matches("^[0-9]{3}$"))){
-				    System.out.println(FILE_INVALID_FORMAT);
+				if((items.length != 2) || (!items[0].matches(codeRegex))){
+				    System.out.println(errorMessage);
 				    return false;
 				}
 
 				//Mapに追加する2つの情報をputの引数として指定
-				branchNames.put(items[0], items[1]);
-				branchSales.put(items[0], 0L);
+				Names.put(items[0], items[1]);
+				Sales.put(items[0], 0L);
 
 			}
 
@@ -228,19 +276,19 @@ public class CalculateSales {
 	 * @param 支店コードと売上金額を保持するMap
 	 * @return 書き込み可否
 	 */
-	private static boolean writeFile(String path, String fileName, Map<String, String> branchNames,
-			Map<String, Long> branchSales) throws IOException {
+	private static boolean writeFile(String path, String fileName, Map<String, String> Names,
+			Map<String, Long> Sales) throws IOException {
 		// ※ここに書き込み処理を作成してください。(処理内容3-1)
 		BufferedWriter bw = null;
 		// 書き出す準備
 		try{
 				bw = new BufferedWriter(new FileWriter(new File(path, fileName)));
 
-			// 支店コードを取り出してその分繰り返す
-			for (String key : branchNames.keySet()) {
+			// 支店・商品コードを取り出してその分繰り返す
+			for (String key : Names.keySet()) {
 
 				// 支店コード、支店名、売上金額をファイルに書き込む
-				bw.write(key + "," + branchNames.get(key) + "," + branchSales.get(key));
+				bw.write(key + "," + Names.get(key) + "," + Sales.get(key));
 
 				// 改行
 				bw.newLine();
